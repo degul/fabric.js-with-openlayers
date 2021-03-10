@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html> 
+<head>
+<meta charset="UTF-8">
+<title>test fabric.js with openlayers</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.6.5/ol.css" type="text/css">
+<link rel="stylesheet" href="https://unpkg.com/ol-contextmenu/dist/ol-contextmenu.min.css" >
+<link href="https://cdn.jsdelivr.net/npm/vanderlee-colorpicker@1.2.16/jquery.colorpicker.min.css" rel="stylesheet" type="text/css"/>
+<style>
+body{ border: 0; margin: 0; height: 100vh; }
+#map {height:100%;overflow: hidden;position: relative;width: 100%;z-index:0;}
+#h{width: 5px; background: #f00; height: 100%; position: absolute; left: 50%; top: 0; opacity: .7; z-index: 99999;cursor: pointer;}
+#w { height: 5px; background: #f00; width: 100%; position: absolute;  top: 50%; opacity: .7; z-index: 99999;cursor: pointer;}
+#cont2 {font-size: 16px;position: relative;float: right;width: 567px;} 
+#cont {font-size: 16px;position: absolute;background: #e0e0e0bd;top: 10px;left: 49px;} 
+#PopLayer{position: absolute;z-index: 99999;background: rgba(204, 204, 204, 0.5);}
+.container {margin: 0 auto;text-align: left;zoom: 1;}
+.in{position: relative;float: left;}
+.out{position: relative;float: right;}
+input[type=text] {width:270px;}
+.weather_popup{font-size: 12px;background: #ffffffcc;padding: 5px;border-radius: 30px;border: 1px solid #aaa;z-index:99999;overflow: auto;cursor: pointer;}
+.weather_popup img{margin: 3px 0 0 0;}
+.weather_popup ul{margin: 0;}
+.weather_popup .c{position: absolute;top: 7px;left: 61px;}
+.weather_popup .t{font-size:13px;font-weight:bold;}
+.overlay { position: absolute !important; top: 50%; left: 50%; z-index:99999; /*background: #ccc;*/ }
+.m_svg_default { position: absolute; left:20px; top:10px; cursor: pointer; /*background-color: #ccc;*/ }
+.ui-colorpicker{font-size: 12px !important;width: 430px !important ;}
+.ui-colorpicker-hex input{width:46px !important;}
+.active {background: #f00;}
+.m_svg_highlight {background-color: rgb(21, 255, 0, 0.5);}
+.shape_editor {display:none;font-size: 14px;position: absolute; top:10px;right:10px;background-color: #aac575; box-shadow: 5px 5px 5px #5c794b;border-radius: 10px;}
+.shape_editor .ll {list-style: none;list-style: none;padding-left: 0px;}
+.shape_editor .ll li {margin: 10px 0;}
+.shape_editor input {width: 130px;}
+.fabricitextToolbar { top: 210px;position: absolute !important;}
+.cont_c {margin: 12px;}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/3.4.0/fabric.min.js"></script>-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.6.5/ol.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.4/proj4.js"></script> 
+<script src="https://unpkg.com/ol-contextmenu"></script>
+ 
+<!-- color picker  https://vanderlee.github.io/colorpicker/ -->
+<script src="https://cdn.jsdelivr.net/npm/vanderlee-colorpicker@1.2.16/jquery.colorpicker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanderlee-colorpicker@1.2.16/i18n/jquery.ui.colorpicker-nl.js"></script>
+<script>
+//fabric override prototype
+fabric.Object.prototype.setCoords = function(ignoreZoom, skipAbsolute) { 
+  this.oCoords = this.calcCoords(ignoreZoom);
+  if (!skipAbsolute) {
+    this.aCoords = this.calcCoords(true);   
+    // bjkim 수정,추가 
+    var olmap = fabric.window.canvas.olmap;
+    if(olmap) {
+      this.geo_lt = map.getCoordinateFromPixel([this.left, this.top]);  
+      this.geo_aCoords = {
+        bl : {
+          x: olmap.getCoordinateFromPixel([this.aCoords.bl.x, this.aCoords.bl.y])[0],
+          y: olmap.getCoordinateFromPixel([this.aCoords.bl.x, this.aCoords.bl.y])[1]
+        },
+        br : {
+          x: olmap.getCoordinateFromPixel([this.aCoords.br.x, this.aCoords.br.y])[0],
+          y: olmap.getCoordinateFromPixel([this.aCoords.br.x, this.aCoords.br.y])[1]
+        },
+        tl : {
+          x: olmap.getCoordinateFromPixel([this.aCoords.tl.x, this.aCoords.tl.y])[0],
+          y: olmap.getCoordinateFromPixel([this.aCoords.tl.x, this.aCoords.tl.y])[1]
+        },
+        tr : {
+          x: olmap.getCoordinateFromPixel([this.aCoords.tr.x, this.aCoords.tr.y])[0],
+          y: olmap.getCoordinateFromPixel([this.aCoords.tr.x, this.aCoords.tr.y])[1]
+        }
+      }   
+    }
+    // bjkim 추가 끝.
+  }
+  // set coordinates of the draggable boxes in the corners used to scale/rotate the image
+  ignoreZoom || (this._setCornerCoords && this._setCornerCoords());
+  return this;
+}
+
+
+
+proj4.defs("EPSG:5179","+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");           
+var map;
+var proxyHost = 'http://localhost:8080/proxyjsonp.do?url=';
+
+function trans() {
+  var from = $('select[name=in]').val();
+  var to = $('select[name=out]').val();
+
+  var x = $('#in').val().split(',')[0]*1;
+  var y = $('#in').val().split(',')[1]*1;
+
+  var trans = ol.proj.transform( [x,y], from, to ); 
+
+  $('#out').val(trans[0]+','+trans[1]);
+}
+
+$(function() {
+    
+    map = new ol.Map({
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.XYZ({
+            url: 'http://tile.stamen.com/watercolor/{z}/{x}/{y}.png'
+          })
+        })
+      ],
+      target: 'map',
+      view: new ol.View({
+        projection: 'EPSG:3857',
+        center: [14203089.275873486, 4414526.262702693],
+        zoom: 7
+      }), 
+    }); 
+  
+  
+    $('#w').draggable({ 
+      axis: "y",
+      drag: function() { 
+        var top = $('#w').css('top');
+        $('#w').text('top:'+top);
+      },
+      stop: function() { 
+        var top = $('#w').css('top');
+        $('#w').text('top:'+top);
+      }
+    });
+    $('#h').draggable({ 
+        axis: "x",
+        drag: function() { 
+          var left = $('#h').css('left');
+          $('#h').text('left:'+left);
+        },
+        stop: function() { 
+          var left = $('#h').css('left');
+          $('#h').text('left:'+left);
+        }
+    });
+    
+ ///////////////////////////////////////////
+ ///////////////////////////////////////////
+ ///////////////////////////////////////////
+ 
+  map.on('postrender', function(e) {
+    console.log('postrender');
+    updateShapeRender();
+  });
+
+
+  map.once('postrender', function(evt){ 
+    fabric_init();
+  }); 
+
+});
+
+/* 도형 렌더링 */
+function updateShapeRender() {
+  
+  if(canvas===null)
+      return; 
+
+      //return ; /////aaaaaaaa
+    canvas.setWidth(map.getViewport().clientWidth);
+    canvas.setHeight(map.getViewport().clientHeight);
+     
+    $.each(canvas.getObjects(), function(k,shape){ 
+
+      if(typeof(shape.geo_aCoords) === "undefined")
+        return;
+
+      var t_geo_aCoords, t_geo_lt ;
+      if(typeof(shape.export_geo_aCoords) !== "undefined") {
+        // 레이어에서 import된 데이터.
+        t_geo_aCoords = shape.export_geo_aCoords;
+        t_geo_lt = shape.export_geo_lt;
+
+        delete shape.export_geo_aCoords;
+        delete shape.export_geo_lt;
+      }
+      else {
+        // 현재 화면에 있는 도형정보
+        t_geo_aCoords = shape.geo_aCoords;
+        t_geo_lt = shape.geo_lt; 
+      }
+
+      var original_aCoords = { 
+        bl : new fabric.Point( 
+          map.getPixelFromCoordinate([t_geo_aCoords.bl.x, t_geo_aCoords.bl.y])[0], 
+          map.getPixelFromCoordinate([t_geo_aCoords.bl.x, t_geo_aCoords.bl.y])[1]
+        ),
+        br : new fabric.Point( 
+          map.getPixelFromCoordinate([t_geo_aCoords.br.x, t_geo_aCoords.br.y])[0], 
+          map.getPixelFromCoordinate([t_geo_aCoords.br.x, t_geo_aCoords.br.y])[1]
+        ),
+        tl : new fabric.Point(
+          map.getPixelFromCoordinate([t_geo_aCoords.tl.x, t_geo_aCoords.tl.y])[0],
+          map.getPixelFromCoordinate([t_geo_aCoords.tl.x, t_geo_aCoords.tl.y])[1]
+        ),
+        tr : new fabric.Point(
+          map.getPixelFromCoordinate([t_geo_aCoords.tr.x, t_geo_aCoords.tr.y])[0],
+          map.getPixelFromCoordinate([t_geo_aCoords.tr.x, t_geo_aCoords.tr.y])[1]
+        )
+      };
+
+      var current_width = shape.aCoords.tr.x - shape.aCoords.bl.x;
+      var original_width = original_aCoords.tr.x - original_aCoords.bl.x; 
+      var scale_ratio = original_width/current_width;   
+
+      var pixel_lt = map.getPixelFromCoordinate(t_geo_lt);  
+      
+      updateShapeScale(shape, pixel_lt, scale_ratio); // 스케일,위치 변경
+      shape.setCoords(); 
+    });  
+    canvas.renderAll(); 
+}
+
+/* 도형 스케일 조정, 지도와 연동 */
+function updateShapeScale(shape, pixel_lt, scale_ratio) { 
+
+  switch (shape.type) { 
+    case "group":  
+    $.each(shape.getObjects(), function(k,obj) { 
+      updateShapeScale(obj, [obj.left*scale_ratio, obj.top*scale_ratio], scale_ratio);
+    });
+    shape.set({
+      left  : pixel_lt[0],
+      top   : pixel_lt[1],
+      width: shape.width * scale_ratio,
+      height: shape.height * scale_ratio,
+    });  
+    break;
+    case "path":
+    var path = shape.path; 
+    $.each(path, function(index, value){ 
+      switch(value[0]) {
+        case 'Q':
+          value[1] = value[1] * scale_ratio;
+          value[2] = value[2] * scale_ratio;
+          value[3] = value[3] * scale_ratio;
+          value[4] = value[4] * scale_ratio;
+        break;
+        case 'M':
+          value[1] = value[1] * scale_ratio;
+          value[2] = value[2] * scale_ratio;
+        break;
+        case 'L': 
+          value[1] = value[1] * scale_ratio;
+          value[2] = value[2] * scale_ratio;
+        break;
+        case 'A': 
+          value[1] = value[1] * scale_ratio;
+          value[2] = value[2] * scale_ratio;  
+          value[6] = value[6] * scale_ratio;
+          value[7] = value[7] * scale_ratio;  
+        break;
+        case 'Z': 
+        break;
+      }
+    }); 
+    shape.set({
+      left  : pixel_lt[0],
+      top   : pixel_lt[1],
+      width: shape.width * scale_ratio,
+      height: shape.height * scale_ratio,
+    }); 
+    shape.pathOffset.x = shape.width/2;
+    shape.pathOffset.y = shape.height/2;
+    break;
+    case "line":
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1],
+        width: shape.width * scale_ratio,
+        height: shape.height * scale_ratio
+      });
+      break;
+    case "polyline":
+    case "polygon":    
+      var temp_points = [];
+
+      for(var i=0;i<shape.points.length; i++) {
+        var x = shape.points[i].x * scale_ratio;
+        var y = shape.points[i].y * scale_ratio;
+        temp_points[i] = {x : x, y : y}; 
+      } 
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1],  
+        points : temp_points,
+        width: shape.width * scale_ratio,
+        height: shape.height * scale_ratio
+      }); 
+      shape.pathOffset.x = shape.width/2;
+      shape.pathOffset.y = shape.height/2; 
+      break;
+    case "textbox": 
+      $.each(shape.styles, function(lineIndex, linedata){ 
+        $.each(linedata, function(charIndex,char){
+          style = shape._getStyleDeclaration(lineIndex*1, charIndex*1);
+          if(style) {
+            if(style.fontSize) {
+              style.fontSize = style.fontSize * scale_ratio;
+            }
+            shape._setStyleDeclaration(lineIndex*1, charIndex*1, style);
+          }
+        });
+      });
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1],
+        width : shape.width * scale_ratio,
+        height : shape.height * scale_ratio, 
+        fontSize : shape.fontSize*scale_ratio,
+      });
+      
+      break;
+    case "rect":
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1], 
+        rx    : shape.rx * scale_ratio,
+        ry    : shape.ry * scale_ratio,
+        width : shape.width * scale_ratio,
+        height : shape.height * scale_ratio, 
+      });  
+      break;
+    
+    case "ellipse": 
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1],
+        rx    : shape.rx * scale_ratio,
+        ry    : shape.ry * scale_ratio, 
+      }); 
+      break;
+
+    case "circle":
+      shape.set({
+        left  : pixel_lt[0],
+        top   : pixel_lt[1],
+        radius : shape.radius * scale_ratio, 
+      });
+      break; 
+      
+  }  
+  
+  return shape; 
+}
+
+/* 도형정보 좌표로 변환해서 저장 */
+function updateShape(shape) {
+  console.log('updateShape');
+  // 도형드래그,리사이즈 스타일
+  var fabric_corner_style = {
+    borderColor: 'red',
+    cornerColor: 'green',
+    transparentCorners: false,
+    strokeUniform: true,  
+    //cornerSize: 6
+  };
+  shape.set(fabric_corner_style);  
+
+  switch(shape.type) {
+    case 'textbox':
+      shape.setControlsVisibility({
+        tl: false,
+        tr: false,
+        mt: false,
+        br: false,
+        bl: false,
+        mb: false,
+      });
+      break;
+  }
+
+
+  canvas.renderAll();
+}
+
+/* fabric 캔버스 지도 추가, 초기화 */
+function fabric_init() {
+  console.log('fabric_init');
+  var view = map.getViewport();
+    var c = document.createElement('canvas');
+    c.id = "fabric_canvas";
+    c.width = view.clientWidth;
+    c.height = view.clientHeight;
+    
+    //view.prepend(c);
+    $(view).prepend(c);
+
+    canvas = new fabric.Canvas("fabric_canvas"),
+    canvas.selection = false,
+    canvas.hoverCursor = "pointer",
+    fabric.Object.prototype.objectCaching = false;
+    fabric.Object.prototype.noScaleCache = false;
+    canvas.on('object:scaling', onObjectScaled);
+    canvas.on('mouse:dblclick', fabric_dbclick); 
+    canvas.olmap = map; // bjkim fabric라이브러리 수정.
+    canvas.selectionKey = 'ctrlKey';
+
+    //view.find(".canvas-container").css("position", "absolute")
+
+    $('#map .canvas-container').css("position", "absolute");
+
+    canvas.on('mouse:down', function(options) {
+      console.log('mouse:down'); 
+
+      if(options.target === null) {
+        mapInteractionActive(true);
+      }
+      else {
+        mapInteractionActive(false);
+      }  
+ 
+    }); 
+
+    canvas.on('mouse:up', function(options) {
+      //console.log('mouse:up');
+      if(options.target !== null) {
+        updateShape(options.target);
+        showStyleForm(options.target, true);
+      } 
+      else { 
+        showStyleForm(options.target, false);
+      }
+ 
+    }); 
+ 
+}
+
+function fabric_dbclick(e){
+  if(e.target == null)
+    return;
+
+  switch(e.target.type) {
+    case "rect":
+    //discard();
+      var pixel = { x: e.target.left, y: e.target.top };
+      var textbox = add_textbox(pixel, e.target.height/5);
+      console.log(e.target);
+
+      canvas.setActiveObject(textbox);
+      canvas.renderAll();
+      break;
+
+  } 
+  
+}
+
+// 캔버스 안 오브젝트 스케일 이벤트.
+function onObjectScaled(e){
+    console.log('onObjectScaled');
+ 
+    fabric.Object.prototype.objectCaching = false;
+    var shape = e.target;  
+ 
+    var strokeWidth = shape.strokeWidth; 
+    console.log(shape.type);
+    switch (shape.type) { 
+      case "path":
+      var path = shape.path; 
+      $.each(path, function(index, value){ 
+        switch(value[0]) {
+          case 'Q':
+            value[1] = value[1] * shape.scaleX;
+            value[2] = value[2] * shape.scaleY;
+            value[3] = value[3] * shape.scaleX;
+            value[4] = value[4] * shape.scaleY;
+          break;
+          case 'M':
+            value[1] = value[1] * shape.scaleX;
+            value[2] = value[2] * shape.scaleY;
+          break;
+          case 'L': 
+            value[1] = value[1] * shape.scaleX;
+            value[2] = value[2] * shape.scaleY;
+          break;
+          case 'A': 
+            value[1] = value[1] * shape.scaleX;
+            value[2] = value[2] * shape.scaleY;  
+            value[6] = value[6] * shape.scaleX;
+            value[7] = value[7] * shape.scaleY;  
+          break;
+          case 'Z': 
+          break;
+        }
+      }); 
+      shape.set({
+        width: shape.width * shape.scaleX,
+        height: shape.height * shape.scaleY,
+        scaleX      : 1,
+        scaleY      : 1,
+        strokeWidth : strokeWidth
+      }); 
+      shape.pathOffset.x = shape.width/2;
+      shape.pathOffset.y = shape.height/2;
+      break;
+      case "polyline":  
+      case "polygon":  
+        var temp_points = []; 
+        for(var i=0;i<shape.points.length; i++) {
+          var x = shape.points[i].x * shape.scaleX;
+          var y = shape.points[i].y * shape.scaleY;
+          temp_points[i] = {x : x, y : y}; 
+        } 
+        shape.set({ 
+          points : temp_points,
+          width: shape.width * shape.scaleX,
+          height: shape.height * shape.scaleY,
+          scaleX      : 1,
+          scaleY      : 1,
+          strokeWidth : strokeWidth
+        });
+        shape.pathOffset.x = shape.width/2;
+        shape.pathOffset.y = shape.height/2;
+        break;
+      case "rect":
+        shape.set({
+          width       : shape.width * shape.scaleX,
+          height      : shape.height * shape.scaleY,
+          scaleX      : 1,
+          scaleY      : 1,
+          strokeWidth : strokeWidth
+        }); 
+        break;
+      
+      case "ellipse": 
+        shape.set({
+          rx          : shape.rx * shape.scaleX,
+          ry          : shape.ry * shape.scaleY,
+          strokeWidth : strokeWidth,
+          //width     : shape.width * shape.scaleX, //shape.rx * 2,
+          //height    : shape.height * shape.scaleY, //shape.ry * 2,
+          scaleX      : 1,
+          scaleY      : 1,
+        }); 
+        break;
+
+      case "circle":
+        shape.set({
+          radius : shape.radius * shape.scaleX,
+          scaleX  : 1,
+          scaleY  : 1,
+        });
+        break;
+    }
+     
+    shape.setCoords();  
+    canvas.renderAll();
+}
+
+
+$(function() {  
+
+  $('#show').click(function(){
+    $('#wh').toggle();
+  }) 
+});
+
+function getPixelFromCoordinate(){
+
+  if(map) {
+    var o = map.getPixelFromCoordinate(map.getView().getCenter());
+    return {
+      x : o[0],
+      y : o[1]
+    }
+  }
+  
+}
+
+function mapInteractionActive(b) {
+  $.each(map.getInteractions().getArray(), function(k,obj){
+    obj.setActive(b);
+  });
+}
+
+var canvas = null;
+
+function add_rect(type) {  
+ var shape = new fabric.Rect({
+   left: getPixelFromCoordinate().x,
+   top: getPixelFromCoordinate().y,
+   fill: 'rgba(216,27,96,0.5)',
+   width: 150,
+   height: 150,
+   strokeWidth: 2,
+   stroke: "#880E4F",
+   //rx: 15,
+   //ry: 15,
+   angle: 0,
+   hasControls: true,
+   strokeUniform: true,
+   originX: 'center',
+   originY: 'center',
+ });
+
+
+ switch(type) {
+   case 0:
+     break;
+   case 1:
+     shape.set({
+      rx: 15,
+      ry: 15,
+     });
+     break;
+ }
+
+
+ canvas.add(shape);    
+ updateShape(shape);  
+}
+
+function add_circle() { 
+  var shape = new fabric.Circle({ 
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    radius: 75,
+    fill: 'rgba(100,216,85,0.5)',
+    stroke: "#880E4F",
+    strokeWidth: 2,
+    hasControls: true,
+    strokeUniform: true,
+    originX: 'center',
+    originY: 'center',
+  }); 
+  canvas.add(shape); 
+  updateShape(shape); 
+}
+
+
+function add_ellipse() { 
+ var shape = new fabric.Ellipse({
+  left: getPixelFromCoordinate().x,
+  top: getPixelFromCoordinate().y,
+  rx: 150,
+  ry: 75,
+  fill: 'rgba(153,153,153,0.5)',
+  stroke: 'rgba(21,0,255,1)',
+  strokeWidth: 2,
+  originX: 'center',
+  originY: 'center',
+ });
+ canvas.add(shape); 
+ updateShape(shape);
+}
+
+
+function add_polygon() {
+
+ var shape = new fabric.Polygon([
+  {x: 0, y: 0},
+  //{x: 100, y: 0}, 
+  //{x: 0, y: 200},
+  {x:200,y:250},
+  {x:220,y:100},
+  {x:300,y:80},
+  {x:80,y:20}
+], {
+  left: getPixelFromCoordinate().x,
+  top: getPixelFromCoordinate().y,
+  fill: 'rgba(200,117,209,0.5)',
+  stroke: '#3f4d76',
+  strokeWidth: 2, 
+  originX: 'center',
+  originY: 'center',
+});
+canvas.add(shape);
+updateShape(shape);
+  
+}
+
+function add_textbox(pixel,fontSize){
+
+  console.log(pixel)
+
+//	var iTextSample = new fabric.IText('hear \ninput text', {
+	var shape = new fabric.Textbox('동해물과\n백두산이', {
+    left: pixel == undefined ? getPixelFromCoordinate().x : pixel.x,
+    top: pixel == undefined ? getPixelFromCoordinate().y : pixel.y,
+    //width: 200,
+    originX: 'center',
+    originY: 'center',
+    lockUniScaling: true,
+    fontFamily: 'Helvetica',
+    fontSize: fontSize == undefined ? '36' : fontSize,
+    //backgroundColor: 'rgba(200,117,209,0.5)',
+    fill: '#333',
+    lineHeight: 1,
+    styles: {
+        /*  0: {
+            0: { fontSize: 80 },
+            1: { textBackgroundColor: 'red' }
+        },
+        1: {
+            0: { textBackgroundColor: 'rgba(0,255,0,0.5)' },
+            4: { fontSize: 20 }
+        } */
+    }
+  }); 
+  canvas.add(shape);
+  updateShape(shape); 
+
+  return shape;
+}
+
+function add_line() {
+  var shape = new fabric.Line([0, 0, 150, 150], {
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    stroke: "#ff0066",
+    strokeWidth: 2,
+    originX: 'center',
+    originY: 'center',
+  });
+  canvas.add(shape);
+  updateShape(shape); 
+}
+
+function add_polyline() {
+  var shape = new fabric.Polyline([
+    { x: 0, y: 0 },
+    { x: 75, y: 0 },
+    { x: 75, y: 150 },
+    { x: 150, y: 150 }
+  ]
+  , {
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    stroke: "#ff0066",
+    fill: 'transparent',
+    strokeWidth: 2,
+    originX: 'center',
+    originY: 'center',
+  });
+  canvas.add(shape);
+  updateShape(shape); 
+}
+
+function add_arrow(type) {
+  var shape;
+
+  switch(type) {
+    case 0:
+      shape = new fabric.Polyline([
+        { x: 0, y: 30 },
+        { x: 100, y: 30 },
+        { x: 100, y: 0 },
+        { x: 150, y: 45 },
+        { x: 100, y: 90 },
+        { x: 100, y: 60 },
+        { x: 0, y: 60 },
+        { x: 0, y: 30 },
+      ]);
+      break;
+    case 1:
+      shape = new fabric.Polyline([
+        { x: 30, y: 0 },
+        { x: 60, y: 0 },
+        { x: 60, y: 100 },
+        { x: 90, y: 100 },
+        { x: 45, y: 150 },
+        { x: 0, y: 100 },
+        { x: 30, y: 100 },
+        { x: 30, y: 0 },
+      ]);
+      break;
+
+  }
+ 
+  shape.set({
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    stroke: "#ff0066",
+    fill: 'rgba(182,79,109,0.5)',
+    strokeWidth: 2,
+    originX: 'center',
+    originY: 'center',
+  });
+  canvas.add(shape);
+  updateShape(shape); 
+}
+
+function add_bubble(type) {
+  var shape;
+
+  switch(type) {
+    case 0:
+      shape = new fabric.Polyline([
+        { x: 0, y: 0 },
+        { x: 150, y: 0 },
+        { x: 150, y: 100 },
+        { x: 55, y: 100 },
+        { x: 40, y: 125 },
+        { x: 25, y: 100 },
+        { x: 0, y: 100 },
+        { x: 0, y: 0 },
+      ]);
+      break;
+    case 1:
+      shape = new fabric.Path('M 0 30 A 30 30 0 0 1 30 0 L 270 0 A 30 30 0 0 1 300 30 L 300 170 A 30 30 0 0 1 270 200 L 140 200 L 110 250 L 70 200 L 30 200 A 30 30 0 0 1 0 170 Z');
+      break;
+  }
+
+  shape.set({
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    stroke: "#ff0066",
+    fill: 'rgba(182,79,109,0.5)',
+    strokeWidth: 2,
+    originX: 'center',
+    originY: 'center',
+  });
+  canvas.add(shape);
+  updateShape(shape); 
+
+}
+
+function add_group() {
+
+  var circle1 = new fabric.Circle({
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    radius: 65,
+    fill: '#039BE5',
+    originX: 'center',
+    originY: 'center',
+  }); 
+  var shape = new fabric.Ellipse({
+  left: getPixelFromCoordinate().x+50,
+  top: getPixelFromCoordinate().y+50,
+  rx: 150,
+  ry: 75,
+  fill: 'rgba(153,153,153,0.5)',
+  stroke: 'rgba(21,0,255,1)',
+  strokeWidth: 2,
+  originX: 'center',
+  originY: 'center',
+ });
+
+  var group = new fabric.Group([circle1, shape, ], {
+    left: getPixelFromCoordinate().x,
+    top: getPixelFromCoordinate().y,
+    originX: 'center',
+    originY: 'center',
+  });
+  canvas.add(group);
+  updateShape(group);  
+   
+}
+
+/* 도형 선택 모두 해제 */
+function discard() {
+  console.log('discard'); 
+  canvas.discardActiveObject();
+  canvas.requestRenderAll();
+  //canvas.renderAll(); 
+}
+
+
+/* 도형편집에서 지도 레이어로 전환 */
+function import_svg() {  
+ 
+  //canvas.setBackgroundColor('rgba(255, 73, 64, 0.6)', canvas.renderAll.bind(canvas));
+  //discard();
+  var json = canvas.toJSON();
+
+  if(json.objects.length === 0)
+    return;
+
+  $.each(json.objects, function(k,json_obj){ 
+    var obj = canvas.getObjects()[k]; 
+    var pixel_bl = obj.aCoords.bl;
+    var pixel_tr = obj.aCoords.tr; 
+    json_obj.export_geo_lt = obj.geo_lt; // !중요!
+    json_obj.export_geo_aCoords = obj.geo_aCoords; // !중요! 
+  });
+ 
+  // canvas 정보
+  var canvasInfo = getCanvasExtentInfo();
+
+  var coord_bl = map.getPixelFromCoordinate([canvasInfo.canvasImageExtent[0], canvasInfo.canvasImageExtent[1]]);
+  var coord_tr = map.getPixelFromCoordinate([canvasInfo.canvasImageExtent[2], canvasInfo.canvasImageExtent[3]]);
+    
+  var dataURL = canvas.toDataURL({
+      format: "png",
+      left: coord_bl[0],
+      top: coord_tr[1],
+      width: coord_tr[0] + Math.abs(coord_bl[0]),
+      height: coord_bl[1] + Math.abs(coord_tr[1]),
+  });  // png
+ 
+  var layer = new ol.layer.Image({
+    source: new ol.source.ImageStatic({ 
+      //url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), 
+      url: dataURL, // png
+      projection: 'EPSG:3857',
+      imageExtent: canvasInfo.canvasImageExtent 
+    })
+    , json: json
+  });  
+  map.addLayer(layer);  
+  canvas.clear();  
+}
+ 
+
+/* 레이어에서 도형편집으로 전환 */
+function export_svg() { 
+      
+  for(var i=map.getLayers().getArray().length-1;i>=0;i--) {
+    var layer = map.getLayers().getArray()[i];
+    if(layer.type === "IMAGE") { 
+      var json = layer.get('json'); 
+      console.log(json);
+      canvas.loadFromJSON(json);  
+      canvas.renderAll();   
+      map.removeLayer(layer);  
+    }
+  }  
+}
+ 
+/* canvas extent */
+function getCanvasExtentInfo() {
+  
+  if(canvas === undefined)
+    return;
+ 
+  var pixel_bl = new fabric.Point(0, canvas.height);
+  var pixel_tr = new fabric.Point(canvas.width, 0);
+
+  $.each(canvas.getObjects(), function(k,shape){
+    if(pixel_bl.x > shape.aCoords.bl.x) {
+      pixel_bl.x = shape.aCoords.bl.x;
+    }
+    if(pixel_bl.y < shape.aCoords.br.y) {
+      pixel_bl.y = shape.aCoords.br.y;
+    }
+    if(pixel_tr.x < shape.aCoords.tr.x) {
+      pixel_tr.x = shape.aCoords.tr.x;
+    }
+    if(pixel_tr.y > shape.aCoords.tl.y) {
+      pixel_tr.y = shape.aCoords.tl.y;
+    }
+  });
+ 
+  pixel_bl = new fabric.Point(pixel_bl.x, pixel_bl.y);
+  pixel_tr = new fabric.Point(pixel_tr.x, pixel_tr.y); 
+
+  var ext_bl = map.getCoordinateFromPixel([pixel_bl.x, pixel_bl.y]);
+  var ext_tr = map.getCoordinateFromPixel([pixel_tr.x, pixel_tr.y]);
+
+  var extent = [ ext_bl[0], ext_bl[1], ext_tr[0], ext_tr[1] ]; 
+   
+  var ret = {
+    canvasImageExtent : extent,
+    pixel_bl : pixel_bl,
+    pixel_tr : pixel_tr
+  }
+
+  return ret;
+}
+ 
+/* 도형편집 */
+$(function() {
+
+  
+  $('#bgcolor').colorpicker({
+    alpha: true,
+    //colorFormat : '#HEX',
+    colorFormat : 'RGBA',
+    select: function(event, color) {
+      //$('#alpha').val(color.a.toFixed(2));
+      updateStyleShape();
+    }
+  });
+
+  $('#polyline_fill').colorpicker({
+    alpha: true,
+    //colorFormat : '#HEX',
+    colorFormat : 'RGBA',
+    select: function(event, color) {
+      //$('#alpha').val(color.a.toFixed(2));
+      updateStyleShape();
+    }
+  });
+
+  
+  $('#polyline_stroke').colorpicker({
+    alpha: true,
+    //colorFormat : '#HEX',
+    colorFormat : 'RGBA',
+    select: function(event, color) {
+      //$('#alpha').val(color.a.toFixed(2));
+      updateStyleShape();
+    }
+  });
+
+  $( "#slider_polyline_stroke_width" ).slider({
+    min: 0,
+    max: 10,
+    slide: function( event, ui ) { 
+      $('#polyline_stroke_width').val( ui.value );
+      updateStyleShape();
+    }
+  });
+
+
+  $('#border_color').colorpicker({
+    alpha: true,
+    //colorFormat : '#HEX',
+    colorFormat : 'RGBA',
+    select: function(event, color) {
+      $('#border_alpha').val(color.a.toFixed(2));
+      updateStyleShape();
+    }
+  });
+
+  $( "#slider_border_width" ).slider({
+    min: 0,
+    max: 10,
+    slide: function( event, ui ) { 
+      $('#border_width').val( ui.value );
+      updateStyleShape();
+    }
+  });
+
+  $( "#slider_radius" ).slider({
+    min: 0,
+    max: 50,
+    slide: function( event, ui ) {
+      $('#radius').val( ui.value );
+      updateStyleShape();
+    }
+  });
+
+  $('#shape_editor').draggable();
+  $('#polyline_editor').draggable();
+  $("#fabricitextToolbar").draggable({});
+  $('#cont').draggable();
+//  $("#fabricitextToolbar").resizable({});
+
+});
+
+/* 스타일 값 적용 */
+function updateStyleShape() { 
+  console.log('updateStyleShape');
+
+  var target = canvas.getActiveObject();
+  if(target === null)
+    return;
+  
+  var border_width = $('#border_width').val()*1;
+  var border_color = $('#border_color').val(); 
+  var radius = $('#radius').val()*1; 
+  var bgcolor = $('#bgcolor').val();  
+
+  // line, polyline
+  var polyline_fill = $('#polyline_fill').val();
+  var polyline_stroke = $('#polyline_stroke').val();
+  var polyline_stroke_width = $('#polyline_stroke_width').val()*1;
+
+  switch (target.type) {
+    case "line":
+    case "polyline": 
+    case "path":
+      target.set({
+        fill : polyline_fill,
+        stroke : polyline_stroke,
+        strokeWidth : polyline_stroke_width,
+      });
+      break;
+    case "polygon":  
+      target.set({
+        fill : bgcolor,
+        stroke : border_color,
+        strokeWidth : border_width,
+      });
+      break;
+    case "rect":  
+      target.set({
+        fill : bgcolor,
+        stroke : border_color,
+        strokeWidth : border_width,
+        rx : radius,
+        ry : radius
+      });
+      break;
+    
+    case "ellipse":  
+    case "circle": 
+      target.set({
+        fill : bgcolor,
+        stroke : border_color,
+        strokeWidth : border_width,
+      });
+      break;
+  } 
+  target.setCoords(); 
+  canvas.renderAll();
+}
+
+/* 스타일 변경 화면 표시 */
+function showStyleForm(target, show) {
+  
+  if(show) {
+    $('#shape_editor').show();
+    $('#polyline_editor').hide();
+    $('#fabricitextToolbar').hide(); 
+    $('#radius').parent().show();
+
+    $('#border_width').val(target.strokeWidth);
+    $('#border_color').val(target.stroke);
+    $('#radius').val(target.rx); 
+    $('#bgcolor').val(target.fill); 
+
+    // line, polyline
+    $('#polyline_fill').val(target.fill);
+    $('#polyline_stroke').val(target.stroke);
+    $('#polyline_stroke_width').val(target.strokeWidth);
+
+    switch (target.type) {
+      case "textbox":
+        $('#fabricitextToolbar').show();
+        $('#shape_editor').hide();
+        break;
+      case "line":  
+      case "polyline":
+      case "path": 
+        $('#shape_editor').hide();
+        $('#polyline_editor').show();
+        break;
+      case "polygon":  
+        $('#radius').parent().hide();
+        break;
+      case "rect":  
+        break; 
+      case "ellipse":  
+        $('#radius').parent().hide();
+        break; 
+      case "circle": 
+        $('#radius').parent().hide();
+        break;
+    }
+  }
+  else {
+    $('#shape_editor').hide();
+    $('#polyline_editor').hide();
+    $('#fabricitextToolbar').hide(); 
+    $('#radius').parent().show(); 
+  } 
+}
+
+//**도형편집
+
+
+/**
+ * itext start
+ */
+ function getActiveStyle(styleName, object) {
+     object = object || canvas.getActiveObject();
+     if (!object) return '';
+    
+     return (object.getSelectionStyles && object.isEditing)
+       ? (object.getSelectionStyles()[styleName] || '')
+       : (object[styleName] || '');
+};
+
+function setActiveStyle(styleName, value, object) {
+    object = object || canvas.getActiveObject();
+    if (!object) return;
+    if (object.setSelectionStyles && object.isEditing) {
+       var style = { };
+       style[styleName] = value;
+       object.setSelectionStyles(style);
+       object.setCoords();
+     }
+     else {
+       switch(styleName) {
+         case 'underline':
+         case 'linethrough':
+         case 'overline':
+          object.set(styleName, !object.get(styleName));
+           break;
+         default:
+           object.set(styleName, value);
+           break;
+       }
+         
+     }
+     object.setCoords();
+     canvas.renderAll();
+};
+function getActiveProp(name) {
+    var object = canvas.getActiveObject();
+    if (!object) return '';
+
+    return object[name] || '';
+}
+function setActiveProp(name, value) {
+    var object = canvas.getActiveObject();
+    if (!object) return;
+    object.set(name, value).setCoords();
+    canvas.renderAll();
+}
+function isChangeFlag(styleName, value) {
+    return getActiveStyle(styleName).indexOf(value) > -1;
+};
+function fontChangeTypeOne(_this){
+    setActiveStyle(_this.id,
+        getActiveStyle(_this.id) === _this.value ? '' : _this.value);
+}
+function fontChangeTypeTwo(_this){
+    //var value = isChangeFlag(_this.id, _this.value) ? getActiveStyle(_this.id).replace(_this.value, '')  : (getActiveStyle(_this.id) + _this.value);
+    setActiveStyle(_this.id, '');
+}
+
+function textFontSize(_this){
+	setActiveStyle(_this.id, parseInt(_this.value, 10));
+}
+function textFontOpacity(_this){
+	setActiveStyle(_this.id, parseInt(_this.value, 10) / 100);
+}
+function textFontChange(_this){
+	setActiveStyle(_this.id, _this.value.toLowerCase());
+	//setActiveProp(_this.id, _this.value.toLowerCase());
+}
+function textFontColors(_this){
+	setActiveStyle(_this.id, _this.value);
+}
+/**
+ * itext end
+ */
+
+
+
+function test() {
+  add_group(); 
+}
+ 
+
+ //////// copy&paste event (복사,붙여넣기 이벤트)
+ $(function(){
+
+  var ctrlDown = false,
+     ctrlKey = 17,
+     cmdKey = 91,
+     vKey = 86,
+     cKey = 67,
+     deleteKey = 46;
+
+    $(document).keydown(function (e) {
+    if(e.keyCode == ctrlKey)
+      canvas.selection = true;
+    
+    if(e.keyCode == deleteKey)
+      removeShape();
+    });
+
+    $(document).keyup(function (e) {
+      canvas.selection = false;
+    });
+
+   $(document).keydown(function (e) {
+     if (e.keyCode == ctrlKey || e.keyCode == cmdKey) ctrlDown = true;
+   }).keyup(function (e) {
+     if (e.keyCode == ctrlKey || e.keyCode == cmdKey) ctrlDown = false;
+   });
+
+   $(".no-copy-paste").keydown(function (e) {
+     if (ctrlDown && (e.keyCode == vKey || e.keyCode == cKey)) return false;
+   });
+
+   // Document Ctrl + C/V 
+   $(document).keydown(function (e) {
+     if (ctrlDown && (e.keyCode == cKey)) {
+      console.log("Document catch Ctrl+C");
+      if(!canvas.getActiveObject())
+       return;
+
+      canvas.getActiveObject().clone(function(cloned) {
+        _clipboard = cloned;
+      });
+     }
+      
+     if (ctrlDown && (e.keyCode == vKey)) {
+       console.log("Document catch Ctrl+V");
+       // clone again, so you can do multiple copies.
+
+       if(typeof(_clipboard)==='undefined')
+        return;
+
+       _clipboard.clone(function (clonedObj) {
+         canvas.discardActiveObject();
+         clonedObj.set({
+           left: clonedObj.left + 10,
+           top: clonedObj.top + 10,
+           evented: true,
+         });
+         if (clonedObj.type === 'activeSelection') {
+           // active selection needs a reference to the canvas.
+           clonedObj.canvas = canvas;
+           clonedObj.forEachObject(function (obj) {
+             canvas.add(obj);
+           });
+           // this should solve the unselectability
+           clonedObj.setCoords();
+         } else {
+           canvas.add(clonedObj);
+         }
+         _clipboard.top += 10;
+         _clipboard.left += 10;
+         updateShape(clonedObj); // 지도와 렌더링 set
+         canvas.setActiveObject(clonedObj);
+         canvas.requestRenderAll();
+       });
+     } 
+
+   }); 
+ }); //////// copy&paste event (복사,붙여넣기 이벤트) 끝......
+
+
+
+///도형 순서 변경
+function sendBackwards() {
+  var activeObject = canvas.getActiveObject();
+  if (activeObject) {
+    canvas.sendBackwards(activeObject);
+  }
+};
+
+function sendToBack() {
+  var activeObject = canvas.getActiveObject();
+  if (activeObject) {
+    canvas.sendToBack(activeObject);
+  }
+};
+
+function bringForward() {
+  var activeObject = canvas.getActiveObject();
+  if (activeObject) {
+    canvas.bringForward(activeObject);
+  }
+};
+
+function bringToFront() {
+  var activeObject = canvas.getActiveObject();
+  if (activeObject) {
+    canvas.bringToFront(activeObject);
+  }
+};
+///도형 순서 변경끝.
+
+
+// 도형편집가능 true/false;
+function editable(bool){
+  discard();
+  $.each(canvas.getObjects(), function(k,shape){
+    shape.editable = bool;
+    shape.selectable = bool;
+  });
+
+} 
+
+  /// 그룹,언그룹
+function group(bool) {
+  if (!canvas.getActiveObject()) {
+    return;
+  }
+
+  if (bool) { // group
+    if (canvas.getActiveObject().type !== 'activeSelection') {
+      return;
+    }
+    canvas.getActiveObject().toGroup();
+  }
+  else { // ungroup
+    if (canvas.getActiveObject().type !== 'group') {
+      return;
+    }
+    canvas.getActiveObject().toActiveSelection();
+  }
+
+  canvas.requestRenderAll();
+}
+ 
+// 도형 삭제
+function removeShape() { 
+  canvas.getActiveObjects().forEach(function (object) {
+    canvas.remove(object);
+  }); 
+}
+ 
+</script>
+</head> 
+<body>  
+  <div id="map" class="map"> 
+    <div id="wh" style="display: none;">
+      <div id="h" style="color: black;"></div>
+      <div id="w" style="color: black;"></div>
+    </div>
+  </div>
+  <div class="container">
+    <div id="info"></div>
+    <div id="cont"> 
+      <div class="cont_c">
+        <button id="fabric" style="display:none;">fabric</button>
+      </div>
+      <div class="cont_c">
+        <button id="show">show/hide line</button>
+        <button id="test" onclick="test();">test</button>
+      </div>
+      <div class="cont_c"> 
+        <button id="add_rect" onclick="add_rect(0);">
+          <svg width="40" height="40">
+            <rect width="40" height="40" style="fill:rgb(216,27,96);stroke-width:1;stroke:rgb(0,0,0)" /> 
+          </svg>
+        </button>
+        <button id="add_rect" onclick="add_rect(1);">
+          <svg width="40" height="40">
+            <rect width="40" height="40" rx="12" ry="12" style="fill:rgb(216,27,96);stroke-width:1;stroke:rgb(0,0,0)" /> 
+          </svg>
+        </button>
+        <button id="add_circle" onclick="add_circle();">
+          <svg height="40" width="40">
+            <circle cx="20" cy="20" r="19" stroke="black" style="fill:rgb(216,27,96);stroke-width:1;stroke:rgb(0,0,0)" />
+          </svg>
+        </button>
+        <button id="add_ellipse" onclick="add_ellipse();">
+          <svg height="40" width="40">
+            <ellipse cx="20" cy="20" rx="19" ry="15" style="fill:rgb(216,27,96);stroke-width:1;stroke:rgb(0,0,0)" />
+          </svg>
+        </button>
+        <button id="add_polygon" onclick="add_polygon();">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAkCAYAAADsHujfAAAFYUlEQVRYR8XWeVATVxwH8LebAxIHBEU5Ui5DiFDFadVRHEQQRFvDIlTtdFqnHaZTa9t/aDEB7GhsqxBj+4926mBtK431AJUkMGoBExJ0tHghCAgBKgG0SA6IkHN3OxuN4wFsQIj7X+a93/f3mbfvvSzEy9wlsaC2ZSjAi3EAziplRRrwGh5oFU+QTqPAv4d4zWrrtehjYAjW4hB+xmG3lSkr9zd5ygQRjVKQfEnUjMDgT0KT1VcMbZFNJi1bOzIQjQNgpEBw+Qhqb1JViEqmE+WErMwqCKba0fb3WQl/LfIN63M1vG7sDL1j6o7WmvVBVtwOIABO2jBcopQXtk41ygkhnkSe4Et/GuPzPE7m6dGaXDN2hN0a+nf+PfMAFwagG8UxCY5RTlys2NM7FainECIsFcmvW+LHNmYELb02Xrha3xrVOHSP02PRLaRDtGtmzHaUbobKqqtFg5NFPQdJzshdBnBqdc68dw/Noc8cJgvFcRyqGWiMJfbUA6vxLTpMrbRiaIlKzigDQIiR1T87/hyEGEhKF4hZ3v4rvop8p2oiQUN2s5da3xx7x9TDNtpHImkwXG7FUEmtXHTOnZyXIEKhEFbdtHauC1h0aeXsmHZ3Ql6c02vR+V4xaGJbH/XOG0GtfhCATqEYdkJZIaobK+8liHNVePyN3lSaeFf05qOTgTxb0z58P6DeoInRDD+IsuEoagfYMQoGyhQVooZxX41rMDWjoIzLDPb9KDTx8qtiXPW3hu6xbhg7OF3mh/NxHOt3AFyColBZXWVR56gr4lyVDXkROIa1fcxK+jXGh9U/VRhXDnFxXtbffXvAZor2ptCLx4QQBat4gq9neTG38NkbpFMFUetaOE0mbWSvVc8FOOhBMUepHYKqx4U8uVvql/tz+tYHLr45GYwdQ2G1vpl729TN6rcOxVEhuMWOO05hGC5TVYifHgZSSCIiSKQCqJzPziieSWNaJorZ035mrRWzw1YULQEUu0wl/Uk7WgYphChajeQdeMN7dty2iDTFRCF5Lcd21i5mUoFw/AvOLUj8phwGw0Lv5AUtror353a6i7lvMfgc6Dq/RSEvmktW4xbEeYoQ/ocM2Eu4M3rjMbJQ13jDUHdIad+l5TWyojiyGrchjzduQUWsD4vyASvhKlkwMV6ru8OtftjoXy0rXEc2f0KQZITPxXDQ+ml46sEoZqCOLFx6/5+lVwc7ehSyoq1kcycEcd4tCD8/gOablctOryQLL9EqE1uG+y4qZaIfyOZOGOJ8RRn5txP8Y9rXzl3UOF6Dn7vOreu26opVMvFv0wJZhfDX0CCKZAcn67A3THeM1WSfRrrR4DDlKmXi89MCIUJTMvIOh3nPYX8Wnqoaq8nuttLsYczCU8v23542SNIGoR+Mmjsyg5dJl/ixu0drtKP1+DcQBYqoOVtIurEntUdcTROR7dk+FMb2bznvnXwRYkYttO/bz+QqZCIvstUgxl8J8mTjVi30CbduDol/7oO7a6R/1hHtxcwaaWGoRyArkdw4KqDUbw1L+yWcGWB0Na03aMLl/11fUCXbu9QjEOfdki7YHUj3Tcth8y64mv7d37CgztAKV0n3ZnkM4jxFSP7d5IA3G1ICFjYTv0v7rsTfGOxoVsr35XgUkpS+nUeD6Yd2R286AkEQ/odWkXZ3uO+0UrbvR49CiGZrkII/IxgBQdnhKZcOdp3L6rHoCmvl4uMeh6QgBYEYwDSbQ1acuNB/c/Wg/VG2Qi6u9Tjk8Z+iYJsvhfGFDXPMNaPWhGe/S8cDvfI9Mlp4KlKgduDoch/AmCmXC0dey4oQTZPW56bOoDGLKsu/W+IOgpjzPzQJMSJtKQUiAAAAAElFTkSuQmCC">
+        </button>
+
+        <!--
+        <button id="add_group" onclick="add_group();">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAkCAYAAADsHujfAAAFYUlEQVRYR8XWeVATVxwH8LebAxIHBEU5Ui5DiFDFadVRHEQQRFvDIlTtdFqnHaZTa9t/aDEB7GhsqxBj+4926mBtK431AJUkMGoBExJ0tHghCAgBKgG0SA6IkHN3OxuN4wFsQIj7X+a93/f3mbfvvSzEy9wlsaC2ZSjAi3EAziplRRrwGh5oFU+QTqPAv4d4zWrrtehjYAjW4hB+xmG3lSkr9zd5ygQRjVKQfEnUjMDgT0KT1VcMbZFNJi1bOzIQjQNgpEBw+Qhqb1JViEqmE+WErMwqCKba0fb3WQl/LfIN63M1vG7sDL1j6o7WmvVBVtwOIABO2jBcopQXtk41ygkhnkSe4Et/GuPzPE7m6dGaXDN2hN0a+nf+PfMAFwagG8UxCY5RTlys2NM7FainECIsFcmvW+LHNmYELb02Xrha3xrVOHSP02PRLaRDtGtmzHaUbobKqqtFg5NFPQdJzshdBnBqdc68dw/Noc8cJgvFcRyqGWiMJfbUA6vxLTpMrbRiaIlKzigDQIiR1T87/hyEGEhKF4hZ3v4rvop8p2oiQUN2s5da3xx7x9TDNtpHImkwXG7FUEmtXHTOnZyXIEKhEFbdtHauC1h0aeXsmHZ3Ql6c02vR+V4xaGJbH/XOG0GtfhCATqEYdkJZIaobK+8liHNVePyN3lSaeFf05qOTgTxb0z58P6DeoInRDD+IsuEoagfYMQoGyhQVooZxX41rMDWjoIzLDPb9KDTx8qtiXPW3hu6xbhg7OF3mh/NxHOt3AFyColBZXWVR56gr4lyVDXkROIa1fcxK+jXGh9U/VRhXDnFxXtbffXvAZor2ptCLx4QQBat4gq9neTG38NkbpFMFUetaOE0mbWSvVc8FOOhBMUepHYKqx4U8uVvql/tz+tYHLr45GYwdQ2G1vpl729TN6rcOxVEhuMWOO05hGC5TVYifHgZSSCIiSKQCqJzPziieSWNaJorZ035mrRWzw1YULQEUu0wl/Uk7WgYphChajeQdeMN7dty2iDTFRCF5Lcd21i5mUoFw/AvOLUj8phwGw0Lv5AUtror353a6i7lvMfgc6Dq/RSEvmktW4xbEeYoQ/ocM2Eu4M3rjMbJQ13jDUHdIad+l5TWyojiyGrchjzduQUWsD4vyASvhKlkwMV6ru8OtftjoXy0rXEc2f0KQZITPxXDQ+ml46sEoZqCOLFx6/5+lVwc7ehSyoq1kcycEcd4tCD8/gOablctOryQLL9EqE1uG+y4qZaIfyOZOGOJ8RRn5txP8Y9rXzl3UOF6Dn7vOreu26opVMvFv0wJZhfDX0CCKZAcn67A3THeM1WSfRrrR4DDlKmXi89MCIUJTMvIOh3nPYX8Wnqoaq8nuttLsYczCU8v23542SNIGoR+Mmjsyg5dJl/ixu0drtKP1+DcQBYqoOVtIurEntUdcTROR7dk+FMb2bznvnXwRYkYttO/bz+QqZCIvstUgxl8J8mTjVi30CbduDol/7oO7a6R/1hHtxcwaaWGoRyArkdw4KqDUbw1L+yWcGWB0Na03aMLl/11fUCXbu9QjEOfdki7YHUj3Tcth8y64mv7d37CgztAKV0n3ZnkM4jxFSP7d5IA3G1ICFjYTv0v7rsTfGOxoVsr35XgUkpS+nUeD6Yd2R286AkEQ/odWkXZ3uO+0UrbvR49CiGZrkII/IxgBQdnhKZcOdp3L6rHoCmvl4uMeh6QgBYEYwDSbQ1acuNB/c/Wg/VG2Qi6u9Tjk8Z+iYJsvhfGFDXPMNaPWhGe/S8cDvfI9Mlp4KlKgduDoch/AmCmXC0dey4oQTZPW56bOoDGLKsu/W+IOgpjzPzQJMSJtKQUiAAAAAElFTkSuQmCC">
+        </button>
+        -->
+         
+        <button id="textbox" onclick="add_textbox();" style="font-size: 30px;">텍스트</button> 
+        <br>
+        <button id="line" onclick="add_line();">
+          <svg width="40" height="40">
+            <line x1="0" y1="0" x2="40" y2="40" stroke-linecap="round" stroke-width="3" stroke="#ff0066"></line>
+          </svg>
+        </button>
+        <button id="polyline" onclick="add_polyline();">
+          <svg height="40" width="40">
+            <polyline points="0,0 20,0 20,40 40,40" style="fill:transparent;stroke:#ff0066;stroke-width:3" /> 
+          </svg>
+        </button>
+        <button id="arrow" onclick=" add_arrow(0);">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAeCAYAAABuUU38AAACBUlEQVRYR+2YyytEURzHv78Zr7wKJSVGyQKlSSaxYWNjR2NtIpZSrFHWbCyYGZTsLfwDHiULhbBgZZCiKY+853GPzuSOM5px71x3mjs3Z3fP43e+n3PO73d/5xDSWBiGNgDqBPAM0CjBvaRVDmkdqMc4AUQ2N07wzGixbTQQzjBN8EwkC2NEEABsjuAdSQbGMCCvBbjIf4FNEL8KePoJYGqADANybM9esflCjuIH1iAIXwesLsL8vRKMoUCuaqy+1p1Ad5lfcgjCtwHJRVg8/w3GcCBcbPNeoKPiWuJhWS5HgMVFWDhIBGNIEC628TDksPlC3YLwSwAugmcjHkwUhGFYlVMpnVWt7dxH+NESx9edBRvqTsO9YLB+1T8CNEBwr/2chxiGp74qJ7WK0GNcPBBut8oXrq4/CTqzQij6nocNErzL4rwySFohuKBEILyt1C+V2feDzrw3ViHAjBG8s/J3DMhNpWVz35GzpccK620j/x25LTsffYVPrFawHc0CMgZEFt+2HegpuZOahJ2JZAEZB8IBWnaDXeW34XZhZ1b/QfT2AbX2fjtaPGJFQrBpnF3tqqSinx7hN7ojqRCo1qYeP0TDgiSVoqhdsVT0E+/sP3dEc9KYCqFKNhOBmCKNN8XFyhRXXdM8PsT6UwY/B8VLzZWCRczFKpnOevc145Ppnx+xPwFQ9Do87s5t2gAAAABJRU5ErkJggg==">
+        </button>
+        <button id="arrow2" onclick=" add_arrow(1);">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAA4CAYAAACVFFp4AAADv0lEQVRoQ+2ZXWwUVRTHf2dntrRWPqpuJJaGglZs5EOrghiwqIkK0cRgojy0WxXp9kUf9Flj9Fkf9KW7BLEtD2giMdGImgitEBDUKh+mIgIlpQazahGshe7MHjO7M7DW7e7sFnxx5mnv3HP+57dnzz0z965Q4qU8uwpCO/27aa+w8T6/9uLX0LFTNuy0jVClYevd/v2uMBDIKgfmr2oZLAR11ajWZ+f/I6BDt4W7huqNvFB1g3b9ou9SbQFQkKGJReusMq+ogxrKt6SDDBXrvkGGggzlyUDJT/ugDxWqo2CVBassWGXBO3Xwkj9hFQSNMWiMQWMMGuP/ojEq7a8UW+6X5rW5nHdqkD6/MURpV7/GuXb+DxtKUxclthn0qdLc4MoAyTuitFZD1RbgMQ/qdG2otxhgMmKcLHRgFUnac4tpzB5OZ84r3esDGGvJ7MuUjlqwt3j14dz7sdF876cF5kAx0XLmbzpiNd48YD2RU5u9YLQIncMXN4rK+oVgdoPenoEU7MNLzJ6hevNkOUEn86kbtOYuPGC1imJkbeRbsKLCpsOZUa6j0r4C6AbmOfdtU872LzN7khHj18sBFUna1zXts1oNS2e4eieAqJDY7en/ayutdDwCaQeqxjE6XyWn960Id49Wh8amAlU9mq5atjsVrRzT2a7OCISiQudHubp59/bKhlagCyQz/+d0OfbFA9Ocwi/7uvfzCy1Xn9MbswLqtJo2YWPPRMFJDxuU2HOgb3oOZ2rk0J7madvKIbqn78LaWSO66JKvPC/E38qnVfD0Q2l/CXjVc0xeH/ryq+UVn5YCddfe8Yciv6Rz/xt5WUi8NplG0eMYJfY66AuewPCc0I4Dd1bs8gO15OvxlbWn0vfnZOYNIf5iId+iQJlfnPZNwDOe0In5xocDi8P9hYQbD6aa5h23H82xeVtIrC/2RXwBuVDvA2s9wR9uNbYebwgfyRdg/tHUglu+t9flzG0TEo8Xg3HmSwEKg34CkvkJVEgdbDK7h+vMU7mBaoesOYv7ragoYXdF7QB5WEikLitQNktPR6BiO+gdztgK88f+5eGuM9cYI8541u92zdK9qTYzxcxscPkGxlcLm5N+YErKkCeoxBpAtwOZnnK+ip93NVd0OZ9X9o23VY5xg2t7DGS1ED/qF6YsoGymOpZC+mPgWmd8boZkgk4/qw1u8N8gtEbo3F8KTNlAbpE/CDhQ7kPyYmgbWCMkPisVZkpAWajYk6Bb/xlY1gnxd8uBmTKQm6kY0OkCdAiJeLkwjt/fOLHEDLCJgC4AAAAASUVORK5CYII=">
+        </button>
+        <br>
+
+        <button id="bubble" onclick="add_bubble(0)">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACoAAAAkCAYAAAD/yagrAAABnklEQVRYR2NkYGBg+M+Quh9ED2bACHEko8NgdiTIbYz/GdL+gxiXDVgXDkbH6l74HY/i0G0BHI2D0aFeG37UjzqUmjEzGqLUDE2QWaMhOhqisAJ/tBylMC2MZiYKAxBD+2iIjoboaPFEpTQwmpmoFJBwY0ZDdDRER4snKqUBjMyEy9xX4szHzliy7kaXV7r9R03j6p9IKrmHoDHwkRJ8Ks+bsc58LsX8AlmN846fmew//osRtIFKChjxmfOfIXU1AwNjyBdexruHnNmXwNTqXvhtLvvgrwcDA8NbRoZZIlRyC15jCDg0TY6BgeEhyIT7Ksybruuwnmf5zcDisv1HMdM/Bg4Ghv9pjAyzZw+4Q0EO+M+QWsLAwNj9l4XxyxEHtumal/9Yi738a8XA8P8EI8NsS3o4Ejz2RIxF/xnSTjEwMJi+FWM6JfzqnxlUjxMjwyy6jasS6dAUVwYGpl0IT/1fxMgwGzwcSC9AlEMhSSB9OgPD/wwGBoY/DAy/lRgZ5j+mlyOJjnqIQ7MkGBj+XGJg+D+JkWF2Cz0dCbILABCh+TjNCB4qAAAAAElFTkSuQmCC">
+        </button>
+
+        <button id="bubble" onclick="add_bubble(1)">        
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAgCAYAAAB+ZAqzAAACJUlEQVRYR+2XTWsTYRSFn5ukOo3FhEq1uLFIU/xaFKkLo1YQERQXolAo7pSM1o3tLzDdu3Cj2LRdGlwGleJCUbIpRdCFiJ9ERIu0YoyxiTHtzCtjUhFBZ14NtcjMYgbmnnvO4XAX9wr1R3GqBxgEdRBoXfy/NF/1DrgGwYxw+YajKc5LYSaBc0tjwlVlWEglRXH6MNjXK83yrBCVmVwsdL/QGii4tjcQ0DJnr9rwwt6ybsbqND6rLpAdokiMgZx81RGaeNQdutdAPW2q7VPVfe1v7T0gVxxjsyBt2f0rzs+1BErabA1siObtaDxbPQvkRWEqh3viiDHcQI0/pjqUqXybdd+Y1wj9xLwmtYjzE/MT001AF+/PmJ+YbgK6eH/G/svE3jvHxzJbFAvOBpsG6V9eqzUZx9gJkPFyWHLFiEz/y2OkbdbaFC6rjUCf5/PtdUfw5sPupqmfhzmStyK7svODukP+G3ztfNM5eJ9sbUrnYsHnP5LuvlPtW/3R3vx3xn5x8LqRKhIJkJQVpDTZu3KkGJFPTk/X4/ltnU+tY7V+iQsjk25cXuvfE3NrUJiXgIFymDd3DxjjoQUV7L1VNY2KWgtcEFJDbhw6dQ1jQ81Qug3s/LAm8OCLIcX2aWsvkIP1MSFp6wi7YT0bc4gUiTiIY86whYWAIgSqXxi96iakW9cyVjd3BuRiXSgtpI7rinrBaxurmTNHgaNg9whjL70I6WK+AjGyGojdcz64AAAAAElFTkSuQmCC">
+        </button>
+       
+      </div>
+      <div class="cont_c">
+        <button onclick="sendBackwards();">sendBackwards</button>
+        <button onclick="sendToBack();">sendToBack</button>
+        <button onclick="bringForward();">bringForward</button>
+        <button onclick="bringToFront();">bringToFront</button> 
+      </div> 
+      <div class="cont_c">
+        <button id="import_svg" onclick="import_svg();">레이어로 전환(import to map)</button>
+        <button id="export_svg" onclick="export_svg();">편집으로 전환(export from map)</button>
+      </div>
+      <div class="cont_c">
+        <button onclick="group(true);">그룹 설정</button>
+        <button onclick="group(false);">그룹 해제</button>
+      </div>
+      <div class="cont_c">
+        <button onclick="editable(false);">editable(false)</button>
+        <button onclick="editable(true);">editable(true)</button>
+      </div>
+      <!--
+      <div class="cont_c">
+        <button onclick="freedraw(false);">freedraw(false)</button>
+        <button onclick="freedraw(true);">freedraw(true)</button>
+      </div>
+      -->
+    </div>
+    <div id="shape_editor" class="shape_editor">
+        <div style="margin: 20px;">
+          <ul class="ll">
+            <li>bgcolor : <input type="text" id="bgcolor" value="#cccccc"/></li>
+            <li>border color : <input type="text" id="border_color" value="#000000"/></li> 
+            <li>
+              radius : <input type="text" id="radius" value="1"/>
+              <div id="slider_radius"></div>  
+            </li>
+            <li>
+              border width : <input type="text" id="border_width" value="1"/>
+              <div id="slider_border_width"></div> 
+            </li> 
+          </ul>
+        </div>  
+    </div>
+    <div id="polyline_editor" class="shape_editor">
+      <div style="margin: 20px;">
+        <ul class="ll">
+          <li>fill : <input type="text" id="polyline_fill" value="#cccccc"/></li>
+          <li>stroke : <input type="text" id="polyline_stroke" value="#000000"/></li>  
+          <li>
+            strokeWidth : <input type="text" id="polyline_stroke_width" value="1"/>
+            <div id="slider_polyline_stroke_width"></div> 
+          </li> 
+        </ul>
+      </div>  
+    </div>
+    <!-- itext toolbar start -->
+    <div id="fabricitextToolbar" class="shape_editor fabricitextToolbar" style="display:none; width:385px;">
+      <ul>
+          <li>
+              <label for="fill">Fill(글자색):</label>
+              <input type="color" value="" id="fill" size="10" onchange="javascript:textFontColors(this);">
+          </li>
+          <li>
+              <label for="textBackgroundColor">Background text color(글자배경색):</label>
+              <input type="color" value="" id="textBackgroundColor" size="10" onchange="javascript:textFontChange(this);">
+          </li>
+          <li>
+              <label for="stroke">Stroke(글자테두리):</label>
+              <input type="color" value="" id="stroke" size="10" onchange="javascript:textFontColors(this);">
+          </li>
+          <li>
+              <label for="backgroundColor">Background(배경):</label>
+              <input type="color" value="" id="backgroundColor" size="10" onchange="javascript:textFontChange(this);">
+          </li>
+          <li>
+              <label for="opacity">Opacity(투명도):</label>
+              <input value="100" type="range" id="opacity" onchange="javascript:textFontOpacity(this);">
+          </li>
+          <li>
+              <label for="strokeWidth">Stroke width(테두리두께):</label>
+              <input value="1" min="0" max="30" type="range" id="strokeWidth" onchange="javascript:textFontSize(this);">
+          </li>
+          <li>
+              <label for="fontFamily">Font family(폰트):</label>
+              <select id="fontFamily" class="btn-object-action" onchange="javascript:textFontChange(this);">
+                <option value="arial">Arial</option>
+                <option value="helvetica" selected="">Helvetica</option>
+                <option value="myriad pro">Myriad Pro</option>
+                <option value="delicious">Delicious</option>
+                <option value="verdana">Verdana</option>
+                <option value="georgia">Georgia</option>
+                <option value="courier">Courier</option>
+                <option value="comic sans ms">Comic Sans MS</option>
+                <option value="impact">Impact</option>
+                <option value="monaco">Monaco</option>
+                <option value="optima">Optima</option>
+                <option value="hoefler text">Hoefler Text</option>
+                <option value="plaster">Plaster</option>
+                <option value="engagement">Engagement</option>
+              </select>
+          </li>
+          <li>
+              <label for="textAlign">Text align(정렬):</label>
+              <select id="textAlign" onchange="javascript:textFontChange(this);">
+                <option value="Left">Left</option>
+                <option value="Center">Center</option>
+                <option value="Right">Right</option>
+                <option value="Justify">Justify</option>
+              </select>
+          </li>
+          <li>
+              <label for="fontSize">Font size(글자크기):</label>
+              <input type="range" value="30" min="1" max="120" step="5" id="fontSize" onchange="javascript:textFontSize(this);">
+          </li>
+          <li>
+              <button id="fontWeight" value="bold" onclick="javascript:fontChangeTypeOne(this);">bold</button>
+              <button id="fontStyle" value="italic" onclick="javascript:fontChangeTypeOne(this);">italic</button>
+              <button id="underline" value="underline" onclick="javascript:fontChangeTypeTwo(this);">underline</button>
+              <button id="linethrough" value="linethrough" onclick="javascript:fontChangeTypeTwo(this);">linethrough</button>
+              <button id="overline" value="overline" onclick="javascript:fontChangeTypeTwo(this);">overline</button>
+          </li>
+      </ul>
+    </div>
+    <!-- itext toolbar end -->
+  </div>
+ 
+ 
+</body> 
+</html>
